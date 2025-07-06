@@ -1,33 +1,61 @@
-using Microsoft.AspNetCore.Mvc;
+﻿using Microsoft.AspNetCore.Mvc;
+using Newtonsoft.Json;
+using System;
+using System.Net.Http;
+using System.Net.Http.Headers;
+using System.Threading.Tasks;
 
 namespace EMPLOYEE_API.Controllers
 {
+    [Route("api/[controller]")]
     [ApiController]
-    [Route("[controller]")]
-    public class WeatherForecastController : ControllerBase
+    public class WeatherHistoryController : ControllerBase
     {
-        private static readonly string[] Summaries = new[]
-        {
-            "Freezing", "Bracing", "Chilly", "Cool", "Mild", "Warm", "Balmy", "Hot", "Sweltering", "Scorching"
-        };
+        private readonly HttpClient _httpClient;
 
-        private readonly ILogger<WeatherForecastController> _logger;
+        // Put your actual OpenWeatherMap API key here
+        private readonly string apiKey = "abcdef1234567890abcdef1234567890";
 
-        public WeatherForecastController(ILogger<WeatherForecastController> logger)
+        public WeatherHistoryController(HttpClient httpClient)
         {
-            _logger = logger;
+            _httpClient = httpClient;
+
+            // Request JSON responses from the API
+            _httpClient.DefaultRequestHeaders.Accept.Clear();
+            _httpClient.DefaultRequestHeaders.Accept.Add(new MediaTypeWithQualityHeaderValue("application/json"));
         }
 
-        [HttpGet(Name = "GetWeatherForecast")]
-        public IEnumerable<WeatherForecast> Get()
+        // GET api/weatherhistory?lat=xx&lon=yy&timestamp=zz
+        [HttpGet]
+        public async Task<IActionResult> GetWeatherHistory([FromQuery] double lat, [FromQuery] double lon, [FromQuery] long timestamp)
         {
-            return Enumerable.Range(1, 5).Select(index => new WeatherForecast
+            // Validate latitude and longitude
+            if (lat < -90 || lat > 90 || lon < -180 || lon > 180)
+                return BadRequest("Latitude must be between -90 and 90, and longitude between -180 and 180.");
+
+            // Validate timestamp (must be within last 5 days)
+            var now = DateTimeOffset.UtcNow.ToUnixTimeSeconds();
+            if (timestamp < now - 432000 || timestamp > now)
+                return BadRequest("Timestamp must be within the last 5 days.");
+
+            // Build API URL with query parameters and API key
+            string url = $"https://api.openweathermap.org/data/3.0/onecall/timemachine?lat={lat}&lon={lon}&dt={timestamp}&appid={apiKey}&units=metric";
+
+            // Call the OpenWeatherMap API
+            var response = await _httpClient.GetAsync(url);
+
+            // If call fails, return error status and message
+            if (!response.IsSuccessStatusCode)
             {
-                Date = DateOnly.FromDateTime(DateTime.Now.AddDays(index)),
-                TemperatureC = Random.Shared.Next(-20, 55),
-                Summary = Summaries[Random.Shared.Next(Summaries.Length)]
-            })
-            .ToArray();
+                string errorDetails = await response.Content.ReadAsStringAsync();
+                return StatusCode((int)response.StatusCode, $"Failed to fetch data: {errorDetails}");
+            }
+
+            // Read JSON response content
+            var jsonData = await response.Content.ReadAsStringAsync();
+
+            // Return JSON data to the client
+            return Ok(JsonConvert.DeserializeObject(jsonData));
         }
     }
 }
