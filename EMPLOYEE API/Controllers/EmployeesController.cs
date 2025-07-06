@@ -36,6 +36,7 @@ namespace EMPLOYEE_API.Controllers
                 Email = addEmployessDto.Email,
                 Salary = addEmployessDto.Salary,
                 Phone = addEmployessDto.Phone,
+                Address = addEmployessDto.Address,
             };
 
             dBContext.Employees.Add(employeeentity);
